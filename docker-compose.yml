@@ -18,12 +18,24 @@ services:
     expose:
       - "8080"
 
+  headscale-admin:
+    image: goodieshq/headscale-admin:latest
+    container_name: headscale-admin
+    restart: unless-stopped
+    networks:
+      - headscale
+    # Not published to the host — reached through Caddy on the admin
+    # subdomain, same as headscale itself.
+    expose:
+      - "80"
+
   caddy:
     image: caddy:2-alpine
     container_name: headscale-caddy
     restart: unless-stopped
     depends_on:
       - headscale
+      - headscale-admin
     volumes:
       - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy/data:/data
@@ -36,6 +48,7 @@ services:
       - "443:443/udp"
     environment:
       - HEADSCALE_DOMAIN=${HEADSCALE_DOMAIN}
+      - HEADSCALE_ADMIN_DOMAIN=${HEADSCALE_ADMIN_DOMAIN}
       - ACME_EMAIL=${ACME_EMAIL}
 
 networks:

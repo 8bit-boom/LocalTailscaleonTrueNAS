@@ -12,3 +12,24 @@
 		format console
 	}
 }
+
+# headscale-admin (web UI). Its own calls to the headscale API are proxied
+# same-origin under /api/* here — point headscale-admin's Settings page at
+# this domain (https://{$HEADSCALE_ADMIN_DOMAIN}), not the main headscale
+# domain, so the browser never has to make a cross-origin request.
+{$HEADSCALE_ADMIN_DOMAIN} {
+	handle /api/* {
+		reverse_proxy headscale:8080
+	}
+
+	handle {
+		reverse_proxy headscale-admin:80
+	}
+
+	encode zstd gzip
+
+	log {
+		output stdout
+		format console
+	}
+}

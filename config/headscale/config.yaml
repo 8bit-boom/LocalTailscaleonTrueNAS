@@ -49,10 +49,10 @@ dns:
 unix_socket: /var/run/headscale/headscale.sock
 unix_socket_permission: "0770"
 
-# ACL policy (optional). Uncomment and add ./config/headscale/acl.hujson
-# once you're ready to restrict who can talk to whom.
-# policy:
-#   path: /etc/headscale/acl.hujson
+# ACL policy — see config/headscale/acl.hujson. Edit the usernames/groups
+# in there to match your actual users before relying on it.
+policy:
+  path: /etc/headscale/acl.hujson
 
 # How long a machine can be offline before headscale expires its node key.
 ephemeral_node_inactivity_timeout: 30m

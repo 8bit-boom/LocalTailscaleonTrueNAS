@@ -1,0 +1,29 @@
+{
+  // Groups let you refer to a set of usernames by one name below.
+  // Usernames are whatever you passed to ./scripts/create-user.sh —
+  // replace "myself" with your real username(s).
+  "groups": {
+    "group:admins": ["myself"]
+  },
+
+  // tagOwners maps a tag to the group(s) allowed to apply it to a node,
+  // e.g. `tailscale up --advertise-tags=tag:server`.
+  "tagOwners": {
+    "tag:server": ["group:admins"]
+  },
+
+  // Legacy ACL rules (action/src/dst) — still fully supported by headscale
+  // and simpler to reason about than the newer "grants" syntax. See
+  // https://headscale.net/stable/ref/policy/ if you outgrow this and want
+  // per-capability "grants" rules instead.
+  "acls": [
+    // Starting point: everyone in group:admins can reach every device on
+    // every port. Tighten this as you add more users/devices — e.g. split
+    // into per-service rules with specific "dst" ports instead of "*:*".
+    {
+      "action": "accept",
+      "src": ["group:admins"],
+      "dst": ["*:*"]
+    }
+  ]
+}

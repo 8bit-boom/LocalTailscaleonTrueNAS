@@ -1,0 +1,129 @@
+# TrueNAS SCALE "Custom App → Install via YAML" variant of docker-compose.yml.
+#
+# Why this is a separate file instead of just pasting docker-compose.yml:
+# TrueNAS's Custom App installer doesn't read .env, and its own bind-mount
+# handling wants absolute host paths rather than the `./config/...`
+# relative paths that work fine with `docker compose up` run from inside a
+# cloned copy of this repo. It's also had reported issues with the
+# compose-level `secrets:`/`profiles:` constructs, so the optional
+# Authelia/2FA service (see README §9) isn't included here — deploy that
+# piece over SSH with the regular docker-compose.yml instead, or fold it
+# in yourself once this base stack is confirmed working.
+#
+# Before pasting into Apps → Discover Apps → Custom App → Install via YAML:
+#   1. Still do README steps 1–2 first (DNS, and `git clone` this repo
+#      onto TrueNAS, e.g. to /mnt/YOUR_POOL/apps/headscale) — this file
+#      only replaces step 5's docker-compose CLI deploy, not steps 1–4/6–9.
+#   2. Find-and-replace every /mnt/YOUR_POOL/apps/headscale below with
+#      wherever you actually cloned it.
+#   3. Replace every CHANGE-ME-* value below with your real domains and
+#      the basic-auth hash from README §7 step 1.
+#   4. Paste the result into the YAML editor and deploy.
+
+services:
+  headscale:
+    image: headscale/headscale:0.29.3@sha256:0e7f1c6e4ce6c2a2a001103ecd3fa645a045adf30ac8a5234fe037b43000cd72
+    container_name: headscale
+    restart: unless-stopped
+    command: headscale serve
+    volumes:
+      - /mnt/YOUR_POOL/apps/headscale/config/headscale:/etc/headscale:ro
+      - /mnt/YOUR_POOL/apps/headscale/data/headscale:/var/lib/headscale
+    networks:
+      - headscale
+    environment:
+      - TZ=America/New_York
+      - HEADSCALE_SERVER_URL=https://CHANGE-ME-headscale.example.com
+    expose:
+      - "8080"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /var/run/headscale:mode=0770
+      - /tmp
+    mem_limit: 512m
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  headscale-admin:
+    image: goodieshq/headscale-admin:v0.27.0@sha256:e579fce717aa9b52d8a4a17e7624ef8e2f0352b90da333615ffd1eccd9e34bf5
+    container_name: headscale-admin
+    restart: unless-stopped
+    networks:
+      - headscale
+    expose:
+      - "80"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    mem_limit: 128m
+    pids_limit: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    container_name: headscale-caddy
+    restart: unless-stopped
+    depends_on:
+      - headscale
+      - headscale-admin
+    volumes:
+      - /mnt/YOUR_POOL/apps/headscale/config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /mnt/YOUR_POOL/apps/headscale/data/caddy/data:/data
+      - /mnt/YOUR_POOL/apps/headscale/data/caddy/config:/config
+    networks:
+      - headscale
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - HEADSCALE_DOMAIN=CHANGE-ME-headscale.example.com
+      - HEADSCALE_ADMIN_DOMAIN=CHANGE-ME-headscale-admin.example.com
+      # Leave as-is unless you're also setting up 2FA over SSH later —
+      # harmless if unused, since the Authelia site block in the Caddyfile
+      # stays commented out until you enable it (see README §9).
+      - AUTHELIA_DOMAIN=
+      - ACME_EMAIL=CHANGE-ME-you@example.com
+      - ADMIN_ALLOWED_CIDRS=100.64.0.0/10 fd7a:115c:a1e0::/48 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12
+      - ADMIN_BASIC_AUTH_USER=admin
+      - ADMIN_BASIC_AUTH_HASH=CHANGE-ME-see-README-section-7-step-1
+      - ADMIN_AUTH_SNIPPET=basic_auth_gate
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    pids_limit: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  headscale:
+    name: headscale

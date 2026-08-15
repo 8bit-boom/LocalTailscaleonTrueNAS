@@ -135,24 +135,36 @@ redirect to HTTPS.
 
 ## 5. Deploy
 
-Either via SSH:
+Two ways to run this — pick one:
+
+**A. Over SSH, using `.env` (steps 1–3 above apply as written):**
 
 ```bash
 docker compose up -d
 docker compose logs -f caddy   # watch for successful cert issuance
 ```
 
-...or as a TrueNAS SCALE **Custom App**: Apps → Discover Apps → *Custom App*
-→ *Install via YAML*, and paste the contents of `docker-compose.yml` (set
-`HEADSCALE_DOMAIN`/`HEADSCALE_ADMIN_DOMAIN`/`ACME_EMAIL`/`TZ`/
-`ADMIN_BASIC_AUTH_USER`/`ADMIN_BASIC_AUTH_HASH` directly in the YAML's
-`environment:` blocks in that case, since the Custom App UI doesn't read
-`.env`). Generate `ADMIN_BASIC_AUTH_HASH` per step 7 below before deploying
-— Caddy won't start the admin site correctly without it.
+**B. As a TrueNAS SCALE Custom App, using `truenas-custom-app.yaml`
+instead of `.env`:** the Custom App installer doesn't read `.env`, and
+wants absolute host paths rather than the `./config/...`-relative ones in
+`docker-compose.yml`, so use the dedicated file instead of the one you
+configured in step 3:
 
-Once `caddy` logs show certificates obtained for both domains,
-`https://headscale.yourdomain.com` should load headscale's plain-text
-"healthy" style landing response.
+1. Open `truenas-custom-app.yaml` and follow the instructions in its
+   header comment: replace every `/mnt/YOUR_POOL/apps/headscale` with
+   wherever you cloned this repo (step 2), and every `CHANGE-ME-*` value
+   with your real domains, email, and the basic-auth hash from step 7
+   below.
+2. Apps → Discover Apps → *Custom App* → *Install via YAML*, paste the
+   edited contents in, deploy.
+3. Optional two-factor auth (§9) isn't included in this file — its
+   `secrets:`/profile-gated-service pattern is unreliable through the
+   Custom App installer in practice, so add that piece over SSH with the
+   regular `docker-compose.yml` instead, once this base stack is working.
+
+Either way, once `caddy` logs show certificates obtained for both
+domains, `https://headscale.yourdomain.com` should load headscale's
+plain-text "healthy" style landing response.
 
 ## 6. Create a user and register a device
 

@@ -9,3 +9,7 @@ secrets/
 *.tar.gz
 config/authelia/users_database.yml
 !config/authelia/users_database.yml.example
+truenas-custom-app.rendered.yaml
+config/caddy/conf.d/global/*.caddy
+config/caddy/conf.d/sites/*.caddy
+!config/caddy/conf.d/sites/*.caddy.example

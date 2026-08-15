@@ -1,5 +1,10 @@
 {
 	email {$ACME_EMAIL}
+	# scripts/setup.sh drops a conf.d/global/*.caddy file with an
+	# `acme_ca` override in here during its staging-certificate check, and
+	# removes it once a real certificate issues. Nothing here in normal
+	# operation — production Let's Encrypt is Caddy's own default.
+	import conf.d/global/*.caddy
 }
 
 # Shared response hardening for all sites.
@@ -86,25 +91,8 @@
 	}
 }
 
-# --- Optional: Authelia portal ---
-# Inert until you uncomment it. Enabling 2FA needs three things done
-# together: this block uncommented, AUTHELIA_DOMAIN set in .env (plus its
-# DNS record), and ADMIN_AUTH_SNIPPET=forward_auth_gate in .env. See
-# README "Optional: two-factor authentication" — do that first, since this
-# alone doesn't start the "2fa" compose profile.
-#
-# {$AUTHELIA_DOMAIN} {
-# 	import hardening
-#
-# 	@not_allowed not remote_ip {$ADMIN_ALLOWED_CIDRS}
-# 	abort @not_allowed
-#
-# 	reverse_proxy authelia:9091
-#
-# 	encode zstd gzip
-#
-# 	log {
-# 		output stdout
-# 		format console
-# 	}
-# }
+# Additional site blocks (e.g. the Authelia portal) get dropped into
+# conf.d/sites/*.caddy by scripts/setup.sh when enabled — empty/missing is
+# fine, this import is a no-op until something's there. See README
+# "Optional: two-factor authentication".
+import conf.d/sites/*.caddy

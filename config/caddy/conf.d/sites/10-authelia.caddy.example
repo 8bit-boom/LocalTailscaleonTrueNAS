@@ -1,0 +1,19 @@
+# Authelia portal site block — see README "Optional: two-factor
+# authentication". Copy this file to 10-authelia.caddy (dropping the
+# .example suffix so Caddy's conf.d/sites/*.caddy import picks it up),
+# then restart Caddy: docker compose up -d caddy
+{$AUTHELIA_DOMAIN} {
+	import hardening
+
+	@not_allowed not remote_ip {$ADMIN_ALLOWED_CIDRS}
+	abort @not_allowed
+
+	reverse_proxy authelia:9091
+
+	encode zstd gzip
+
+	log {
+		output stdout
+		format console
+	}
+}

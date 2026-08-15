@@ -127,15 +127,17 @@ services:
       - headscale
       - headscale-admin
     volumes:
-      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Whole directory (not just the Caddyfile) so conf.d/ drop-ins —
+      # written by scripts/setup.sh, or by hand per README — are visible.
+      - ./config/caddy:/etc/caddy:ro
       - ./data/caddy/data:/data
       - ./data/caddy/config:/config
     networks:
       - headscale
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - "${HOST_HTTP_PORT:-80}:80"
+      - "${HOST_HTTPS_PORT:-443}:443"
+      - "${HOST_HTTPS_PORT:-443}:443/udp"
     environment:
       - HEADSCALE_DOMAIN=${HEADSCALE_DOMAIN}
       - HEADSCALE_ADMIN_DOMAIN=${HEADSCALE_ADMIN_DOMAIN}

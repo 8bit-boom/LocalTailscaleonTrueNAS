@@ -1,11 +1,16 @@
 services:
   headscale:
-    image: headscale/headscale:0.29.3
+    # Pin by tag+digest so `docker compose pull` can't silently change what
+    # you're running. To upgrade: pick a new version, resolve its digest
+    # (see README "Updating headscale"), and update both here deliberately.
+    image: headscale/headscale:0.29.3@sha256:0e7f1c6e4ce6c2a2a001103ecd3fa645a045adf30ac8a5234fe037b43000cd72
     container_name: headscale
     restart: unless-stopped
     command: headscale serve
     volumes:
-      - ./config/headscale:/etc/headscale
+      # Read-only: nothing headscale does at runtime should ever need to
+      # write into its own config directory (that's ACL policy + config.yaml).
+      - ./config/headscale:/etc/headscale:ro
       - ./data/headscale:/var/lib/headscale
     networks:
       - headscale
@@ -17,20 +22,63 @@ services:
     # "headscale" network and terminates TLS in front of it.
     expose:
       - "8080"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      # unix_socket in config.yaml lives here; needs to be writable.
+      - /var/run/headscale:mode=0770
+      - /tmp
+    mem_limit: 512m
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   headscale-admin:
-    image: goodieshq/headscale-admin:latest
+    # Pinned to a concrete release (not :latest) — this SPA runs same-origin
+    # with the headscale API and holds a bearer key in the browser, so an
+    # unreviewed upstream change here is a real supply-chain risk.
+    image: goodieshq/headscale-admin:v0.27.0@sha256:e579fce717aa9b52d8a4a17e7624ef8e2f0352b90da333615ffd1eccd9e34bf5
     container_name: headscale-admin
     restart: unless-stopped
     networks:
       - headscale
     # Not published to the host — reached through Caddy on the admin
-    # subdomain, same as headscale itself.
+    # subdomain, same as headscale itself. Caddy also restricts *who* can
+    # reach that subdomain at all (see Caddyfile) since this UI holds a
+    # key that can fully administer the tailnet.
     expose:
       - "80"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Covers the common "start as root to bind :80, then drop to an
+      # unprivileged user" pattern most static-file/nginx images use.
+      # Root filesystem is left writable for this one (unverified internal
+      # temp/cache paths) — if the container fails to start after this
+      # change, check `docker compose logs headscale-admin` first.
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    mem_limit: 128m
+    pids_limit: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     container_name: headscale-caddy
     restart: unless-stopped
     depends_on:
@@ -50,6 +98,25 @@ services:
       - HEADSCALE_DOMAIN=${HEADSCALE_DOMAIN}
       - HEADSCALE_ADMIN_DOMAIN=${HEADSCALE_ADMIN_DOMAIN}
       - ACME_EMAIL=${ACME_EMAIL}
+      - ADMIN_ALLOWED_CIDRS=${ADMIN_ALLOWED_CIDRS:-100.64.0.0/10 fd7a:115c:a1e0::/48 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12}
+      - ADMIN_BASIC_AUTH_USER=${ADMIN_BASIC_AUTH_USER:-admin}
+      - ADMIN_BASIC_AUTH_HASH=${ADMIN_BASIC_AUTH_HASH}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    pids_limit: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   headscale:

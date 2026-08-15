@@ -2,7 +2,20 @@
 	email {$ACME_EMAIL}
 }
 
+# Shared response hardening for both sites.
+(hardening) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+}
+
 {$HEADSCALE_DOMAIN} {
+	import hardening
+
 	reverse_proxy headscale:8080
 
 	encode zstd gzip
@@ -17,7 +30,29 @@
 # same-origin under /api/* here — point headscale-admin's Settings page at
 # this domain (https://{$HEADSCALE_ADMIN_DOMAIN}), not the main headscale
 # domain, so the browser never has to make a cross-origin request.
+#
+# This UI holds a bearer key that can fully administer the tailnet (create
+# users, mint pre-auth keys, delete nodes — there is no read-only headscale
+# key), and its hostname is public the moment Let's Encrypt issues a cert
+# for it (Certificate Transparency logs), so it's locked down two ways:
+# an IP allowlist (only your LAN and the tailnet itself may connect) and
+# HTTP basic auth as a second factor on top of that.
 {$HEADSCALE_ADMIN_DOMAIN} {
+	import hardening
+
+	@not_allowed not remote_ip {$ADMIN_ALLOWED_CIDRS}
+	abort @not_allowed
+
+	basic_auth {
+		{$ADMIN_BASIC_AUTH_USER} {$ADMIN_BASIC_AUTH_HASH}
+	}
+
+	header {
+		X-Frame-Options "DENY"
+		X-Robots-Tag "noindex, nofollow, noarchive"
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+	}
+
 	handle /api/* {
 		reverse_proxy headscale:8080
 	}

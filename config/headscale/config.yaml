@@ -50,8 +50,12 @@ unix_socket: /var/run/headscale/headscale.sock
 unix_socket_permission: "0770"
 
 # ACL policy — see config/headscale/acl.hujson. Edit the usernames/groups
-# in there to match your actual users before relying on it.
+# in there to match your actual users before relying on it. `mode: file`
+# is set explicitly (rather than relying on the default) so a future
+# headscale version can't silently switch this to "database" mode, which
+# would make this file stop applying without any obvious error.
 policy:
+  mode: file
   path: /etc/headscale/acl.hujson
 
 # How long a machine can be offline before headscale expires its node key.

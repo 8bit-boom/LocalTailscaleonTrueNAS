@@ -11,9 +11,11 @@ Internet ── router (port-forward 80/443) ── TrueNAS SCALE
                                                └── docker compose
                                                      ├── caddy            (TLS termination, :80/:443)
                                                      │     ├─ HEADSCALE_DOMAIN       → headscale:8080
-                                                     │     └─ HEADSCALE_ADMIN_DOMAIN → headscale-admin:80 (+ /api/* → headscale:8080)
+                                                     │     ├─ HEADSCALE_ADMIN_DOMAIN → headscale-admin:80 (+ /api/* → headscale:8080)
+                                                     │     └─ AUTHELIA_DOMAIN        → authelia:9091           [optional, "2fa" profile]
                                                      ├── headscale        (:8080, internal only)
-                                                     └── headscale-admin  (:80, internal only)
+                                                     ├── headscale-admin  (:80, internal only)
+                                                     └── authelia         (:9091, internal only)     [optional, "2fa" profile]
 ```
 
 ## Prerequisites
@@ -276,6 +278,75 @@ the classic groups/tagOwners/acls format used here — see headscale's
 [policy docs](https://headscale.net/stable/ref/policy/) if you need
 per-capability rules instead of a simple allow-list.
 
+## 9. Optional: two-factor authentication
+
+Everything above (IP allowlist + basic auth) is the default and needs no
+extra setup. If you want a second factor (TOTP, i.e. a 6-digit code from
+an authenticator app) in front of headscale-admin as well, this stack can
+run [Authelia](https://www.authelia.com) as an opt-in `docker compose`
+[profile](https://docs.docker.com/compose/how-tos/profiles/) — it stays
+off, and nothing below changes, unless you do all of the following:
+
+1. **A third subdomain.** Add one more DNS record the same way as step 1
+   — a `CNAME` named e.g. `auth` pointing at your step-2 record — for
+   `AUTHELIA_DOMAIN` (Authelia's own login portal lives here; it's a
+   separate origin from `HEADSCALE_ADMIN_DOMAIN` by design, matching
+   Caddy's `forward_auth` model).
+2. **Generate secrets:**
+   ```bash
+   ./scripts/setup-2fa-secrets.sh
+   ```
+   Writes three random keys into `./secrets/` (gitignored). Losing or
+   regenerating `authelia_storage_encryption_key` later makes Authelia's
+   database unreadable — back up `./secrets/` and `./data/authelia`
+   together (not covered by `scripts/backup.sh`, which is headscale-only).
+3. **Create your admin account:**
+   ```bash
+   cp config/authelia/users_database.yml.example config/authelia/users_database.yml
+   docker run --rm -it authelia/authelia:4.39.20 authelia crypto hash generate argon2
+   ```
+   Paste the resulting hash into `config/authelia/users_database.yml`
+   (replacing the placeholder), and set a real email address there —
+   Authelia wants one even though this setup doesn't send mail (see
+   below).
+4. **Edit `config/authelia/configuration.yml`** — replace the four
+   `CHANGE-ME` placeholders with your real `AUTHELIA_DOMAIN`,
+   `HEADSCALE_ADMIN_DOMAIN`, and zone apex (e.g. `yourdomain.com`, which
+   must cover both subdomains as Authelia's session cookie is set at that
+   level).
+5. **Set in `.env`:**
+   ```
+   AUTHELIA_DOMAIN=auth.yourdomain.com
+   ADMIN_AUTH_SNIPPET=forward_auth_gate
+   ```
+6. **Uncomment the Authelia site block** at the bottom of
+   `config/caddy/Caddyfile` (it's inert by default).
+7. **Start it:**
+   ```bash
+   docker compose --profile 2fa up -d
+   ```
+   From now on, include `--profile 2fa` on every `docker compose` command
+   that should include Authelia (`up`, `pull`, `logs`, etc.) — plain
+   `docker compose up -d` without the flag leaves it stopped.
+8. Visit `https://headscale-admin.yourdomain.com`, get redirected to the
+   Authelia portal, log in with the account from step 3, and enroll TOTP
+   by scanning the QR code it shows on first login (any authenticator
+   app — Aegis, Ente Auth, 1Password, etc. all work).
+
+No SMTP is configured — Authelia writes password-reset/identity-verification
+links to a file instead of emailing them, since this is meant for one
+admin account, not a multi-user portal:
+```bash
+docker exec authelia cat /data/notification.txt
+```
+Password reset is disabled outright in `configuration.yml`
+(`authentication_backend.password_reset.disable: true`) — regenerate the
+hash from step 3 and edit `users_database.yml` directly if you forget it.
+
+To go back to basic-auth-only: set `ADMIN_AUTH_SNIPPET=basic_auth_gate`
+(or delete the line) in `.env`, `docker compose up -d caddy`, and
+optionally `docker compose --profile 2fa stop authelia`.
+
 ## Backups
 
 ```bash
@@ -300,12 +371,13 @@ and encrypt it for any off-site copy, e.g.
 
 ## Updating
 
-**headscale / caddy / headscale-admin** are all pinned by tag *and*
-digest in `docker-compose.yml` — `docker compose pull` alone won't change
-what's running, on purpose (`headscale-admin` in particular runs
-same-origin with the API and holds a bearer key in the browser, so
-silently picking up unreviewed upstream changes is a real risk here, not
-just a stability nicety). To upgrade a service deliberately:
+**headscale / caddy / headscale-admin / authelia** are all pinned by tag
+*and* digest in `docker-compose.yml` — `docker compose pull` alone won't
+change what's running, on purpose (`headscale-admin` in particular runs
+same-origin with the API and holds a bearer key in the browser, and
+`authelia` holds your login credentials and TOTP state, so silently
+picking up unreviewed upstream changes is a real risk here, not just a
+stability nicety). To upgrade a service deliberately:
 
 1. Pick the new tag, read its release notes.
 2. Resolve its digest, e.g. for headscale:
@@ -361,6 +433,28 @@ starts failing after an upgrade.
   capability not in the `cap_add` list in `docker-compose.yml`; loosen
   that service's `cap_drop`/`cap_add` (or remove them) rather than the
   other two.
+- **headscale-admin is a 502/504 after setting `ADMIN_AUTH_SNIPPET=forward_auth_gate`**:
+  Authelia isn't actually running — you need `docker compose --profile 2fa up -d`,
+  not plain `docker compose up -d` (which never starts profile-gated
+  services). Set `ADMIN_AUTH_SNIPPET` back to `basic_auth_gate` to regain
+  access while you sort this out.
+- **Locked out of headscale-admin after enabling 2FA**: TOTP codes are
+  time-based — check the TrueNAS box's clock (`date`) and your phone's
+  clock are both accurate. As a last resort, set
+  `ADMIN_AUTH_SNIPPET=basic_auth_gate` in `.env` and
+  `docker compose up -d caddy` to fall back to basic auth without needing
+  Authelia to cooperate.
+- **Authelia container won't start**: almost always a missing/placeholder
+  value — confirm `./scripts/setup-2fa-secrets.sh` has actually been run
+  (files exist under `./secrets/`) and that the four `CHANGE-ME`
+  placeholders in `config/authelia/configuration.yml` were replaced with
+  your real domains. Check `docker compose logs authelia`.
+- **Plain `docker compose up -d` (no `--profile 2fa`, no interest in 2FA)
+  errors about a missing file under `./secrets/`**: the `authelia`
+  service is profile-gated and shouldn't need its secrets to exist just
+  to leave it stopped, but if your Compose version is stricter about
+  this, running `./scripts/setup-2fa-secrets.sh` once is harmless even if
+  you never enable the profile — it only writes three small text files.
 
 ## Scope notes
 

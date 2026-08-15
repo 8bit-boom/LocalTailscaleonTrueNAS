@@ -3,6 +3,9 @@
 !.env.example
 data/
 backups/
+secrets/
 *.key
 *.pem
 *.tar.gz
+config/authelia/users_database.yml
+!config/authelia/users_database.yml.example

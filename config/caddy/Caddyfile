@@ -2,7 +2,7 @@
 	email {$ACME_EMAIL}
 }
 
-# Shared response hardening for both sites.
+# Shared response hardening for all sites.
 (hardening) {
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -10,6 +10,24 @@
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
 		-Server
+	}
+}
+
+# Default auth gate for headscale-admin: username/password only. Selected
+# via ADMIN_AUTH_SNIPPET in .env (defaults to this one).
+(basic_auth_gate) {
+	basic_auth {
+		{$ADMIN_BASIC_AUTH_USER} {$ADMIN_BASIC_AUTH_HASH}
+	}
+}
+
+# Optional stronger auth gate: username/password + TOTP via Authelia.
+# Requires the "2fa" compose profile to be running — see README "Optional:
+# two-factor authentication" before setting ADMIN_AUTH_SNIPPET to this.
+(forward_auth_gate) {
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
 	}
 }
 
@@ -36,16 +54,15 @@
 # key), and its hostname is public the moment Let's Encrypt issues a cert
 # for it (Certificate Transparency logs), so it's locked down two ways:
 # an IP allowlist (only your LAN and the tailnet itself may connect) and
-# HTTP basic auth as a second factor on top of that.
+# an auth gate on top of that — username/password by default, or
+# username/password + TOTP if you've enabled the "2fa" profile (see README).
 {$HEADSCALE_ADMIN_DOMAIN} {
 	import hardening
 
 	@not_allowed not remote_ip {$ADMIN_ALLOWED_CIDRS}
 	abort @not_allowed
 
-	basic_auth {
-		{$ADMIN_BASIC_AUTH_USER} {$ADMIN_BASIC_AUTH_HASH}
-	}
+	import {$ADMIN_AUTH_SNIPPET:basic_auth_gate}
 
 	header {
 		X-Frame-Options "DENY"
@@ -68,3 +85,26 @@
 		format console
 	}
 }
+
+# --- Optional: Authelia portal ---
+# Inert until you uncomment it. Enabling 2FA needs three things done
+# together: this block uncommented, AUTHELIA_DOMAIN set in .env (plus its
+# DNS record), and ADMIN_AUTH_SNIPPET=forward_auth_gate in .env. See
+# README "Optional: two-factor authentication" — do that first, since this
+# alone doesn't start the "2fa" compose profile.
+#
+# {$AUTHELIA_DOMAIN} {
+# 	import hardening
+#
+# 	@not_allowed not remote_ip {$ADMIN_ALLOWED_CIDRS}
+# 	abort @not_allowed
+#
+# 	reverse_proxy authelia:9091
+#
+# 	encode zstd gzip
+#
+# 	log {
+# 		output stdout
+# 		format console
+# 	}
+# }

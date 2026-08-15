@@ -77,6 +77,48 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Optional two-factor auth in front of headscale-admin (TOTP via Authelia).
+  # Off by default — only starts with `docker compose --profile 2fa up -d`,
+  # after you've filled in config/authelia/configuration.yml and
+  # config/authelia/users_database.yml and set ADMIN_AUTH_SNIPPET in .env.
+  # See README "Optional: two-factor authentication".
+  authelia:
+    image: authelia/authelia:4.39.20@sha256:1b363e9279e742397966333f364e0876ae02bf5c876de73e83af6d48c57ff51b
+    container_name: authelia
+    restart: unless-stopped
+    profiles:
+      - 2fa
+    volumes:
+      - ./config/authelia:/config:ro
+      - ./data/authelia:/data
+    networks:
+      - headscale
+    expose:
+      - "9091"
+    environment:
+      - TZ=${TZ:-UTC}
+      - AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE=/run/secrets/authelia_jwt_secret
+      - AUTHELIA_SESSION_SECRET_FILE=/run/secrets/authelia_session_secret
+      - AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE=/run/secrets/authelia_storage_encryption_key
+    secrets:
+      - authelia_jwt_secret
+      - authelia_session_secret
+      - authelia_storage_encryption_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    pids_limit: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   caddy:
     image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     container_name: headscale-caddy
@@ -97,10 +139,14 @@ services:
     environment:
       - HEADSCALE_DOMAIN=${HEADSCALE_DOMAIN}
       - HEADSCALE_ADMIN_DOMAIN=${HEADSCALE_ADMIN_DOMAIN}
+      - AUTHELIA_DOMAIN=${AUTHELIA_DOMAIN}
       - ACME_EMAIL=${ACME_EMAIL}
       - ADMIN_ALLOWED_CIDRS=${ADMIN_ALLOWED_CIDRS:-100.64.0.0/10 fd7a:115c:a1e0::/48 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12}
       - ADMIN_BASIC_AUTH_USER=${ADMIN_BASIC_AUTH_USER:-admin}
       - ADMIN_BASIC_AUTH_HASH=${ADMIN_BASIC_AUTH_HASH}
+      # basic_auth_gate (default) or forward_auth_gate (Authelia/TOTP) —
+      # see README "Optional: two-factor authentication" before switching.
+      - ADMIN_AUTH_SNIPPET=${ADMIN_AUTH_SNIPPET:-basic_auth_gate}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -121,3 +167,14 @@ services:
 networks:
   headscale:
     name: headscale
+
+# Only read if the "2fa" profile is started. Files live under ./secrets
+# (gitignored) — generate with, e.g., `openssl rand -hex 32`. See README
+# "Optional: two-factor authentication".
+secrets:
+  authelia_jwt_secret:
+    file: ./secrets/authelia_jwt_secret
+  authelia_session_secret:
+    file: ./secrets/authelia_session_secret
+  authelia_storage_encryption_key:
+    file: ./secrets/authelia_storage_encryption_key

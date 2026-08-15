@@ -1,0 +1,17 @@
+# Copy this file to users_database.yml (gitignored — it holds a password
+# hash) and fill in a real hash before starting the "2fa" profile.
+#
+# Generate a hash (prompts for the password interactively, so it never
+# lands in shell history):
+#   docker run --rm -it authelia/authelia:4.39.20 authelia crypto hash generate argon2
+#
+# TOTP itself is NOT set here — Authelia prompts you to scan a QR code and
+# enroll TOTP the first time you log in through the portal.
+users:
+  admin:
+    disabled: false
+    displayname: 'Admin'
+    password: '$argon2id$CHANGE-ME-paste-the-generated-hash-here'
+    email: admin@example.com
+    groups:
+      - admins

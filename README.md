@@ -36,6 +36,17 @@ proxied/orange) — Headscale's client protocol needs a direct TLS connection
 to your server for Let's Encrypt's HTTP-01 challenge and for the Tailscale
 client's noise-protocol handshake to work reliably.
 
+> **Do not put Headscale behind Cloudflare Tunnel or the Cloudflare proxy,
+> even if you already use a tunnel for other self-hosted services.**
+> [Headscale's own docs](https://headscale.net/stable/ref/integration/reverse-proxy/)
+> state this is unsupported: the Tailscale control protocol upgrades its
+> WebSocket connection with `POST` instead of `GET`, which Cloudflare's edge
+> rejects outright (see [headscale#2379](https://github.com/juanfont/headscale/issues/2379)).
+> It's a protocol-level incompatibility, not a config issue — port-forwarding
+> straight to Caddy (below) is the supported path. If you use Cloudflare
+> Tunnel for other apps, that's unaffected — just don't route this domain
+> through it.
+
 Your public IP will change unless your ISP gives you a static one — use a
 dynamic DNS updater (Cloudflare has a straightforward API for this) if it's
 dynamic.

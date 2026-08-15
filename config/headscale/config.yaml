@@ -1,0 +1,58 @@
+# Headscale configuration.
+#
+# server_url below is a placeholder — it is overridden at runtime by the
+# HEADSCALE_SERVER_URL environment variable set from HEADSCALE_DOMAIN in
+# .env (see docker-compose.yml), so you don't need to edit this file for
+# a normal deploy. It's kept here so `headscale` still works if you ever
+# run it without that env var.
+server_url: https://headscale.example.com
+
+# Headscale listens on plain HTTP inside the container; Caddy terminates
+# TLS in front of it and reverse-proxies here.
+listen_addr: 0.0.0.0:8080
+metrics_listen_addr: 127.0.0.1:9090
+
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: false
+
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+
+# TLS is handled by the Caddy reverse proxy, not headscale itself.
+tls_letsencrypt_hostname: ""
+tls_cert_path: ""
+tls_key_path: ""
+
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+
+log:
+  level: info
+
+dns:
+  magic_dns: true
+  base_domain: headscale.example.internal
+  nameservers:
+    global:
+      - 1.1.1.1
+      - 1.0.0.1
+  search_domains: []
+
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
+
+# ACL policy (optional). Uncomment and add ./config/headscale/acl.hujson
+# once you're ready to restrict who can talk to whom.
+# policy:
+#   path: /etc/headscale/acl.hujson
+
+# How long a machine can be offline before headscale expires its node key.
+ephemeral_node_inactivity_timeout: 30m

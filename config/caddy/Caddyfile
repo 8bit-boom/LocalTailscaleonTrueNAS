@@ -1,0 +1,14 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$HEADSCALE_DOMAIN} {
+	reverse_proxy headscale:8080
+
+	encode zstd gzip
+
+	log {
+		output stdout
+		format console
+	}
+}

@@ -1,0 +1,43 @@
+services:
+  headscale:
+    image: headscale/headscale:0.29.3
+    container_name: headscale
+    restart: unless-stopped
+    command: headscale serve
+    volumes:
+      - ./config/headscale:/etc/headscale
+      - ./data/headscale:/var/lib/headscale
+    networks:
+      - headscale
+    environment:
+      - TZ=${TZ:-UTC}
+      # Overrides server_url in config.yaml so you only set the domain once, in .env
+      - HEADSCALE_SERVER_URL=https://${HEADSCALE_DOMAIN}
+    # Not published to the host — Caddy reaches it over the internal
+    # "headscale" network and terminates TLS in front of it.
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: headscale-caddy
+    restart: unless-stopped
+    depends_on:
+      - headscale
+    volumes:
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy/data:/data
+      - ./data/caddy/config:/config
+    networks:
+      - headscale
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - HEADSCALE_DOMAIN=${HEADSCALE_DOMAIN}
+      - ACME_EMAIL=${ACME_EMAIL}
+
+networks:
+  headscale:
+    name: headscale

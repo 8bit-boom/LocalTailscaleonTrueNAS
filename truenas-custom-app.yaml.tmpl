@@ -7,7 +7,8 @@
 # doesn't read .env and wants absolute host paths, not the `./config/...`
 # relative ones docker-compose.yml uses. It also has reported issues with
 # the compose-level `secrets:`/`profiles:` constructs, so the optional
-# Authelia/2FA service (README §9) isn't included here — deploy that piece
+# Authelia/2FA service (README "Optional: two-factor authentication")
+# isn't included here — deploy that piece
 # over SSH with the regular docker-compose.yml instead.
 #
 # To deploy the rendered file: Apps → Discover Apps → Custom App →
@@ -94,7 +95,8 @@ services:
       - HEADSCALE_ADMIN_DOMAIN=__HEADSCALE_ADMIN_DOMAIN__
       # Leave as-is unless you're also setting up 2FA over SSH later —
       # harmless if unused, since Caddy's conf.d/sites import is a no-op
-      # until a site block actually exists there (see README §9).
+      # until a site block actually exists there (see README "Optional:
+      # two-factor authentication").
       - AUTHELIA_DOMAIN=
       - ACME_EMAIL=__ACME_EMAIL__
       - ADMIN_ALLOWED_CIDRS=__ADMIN_ALLOWED_CIDRS__

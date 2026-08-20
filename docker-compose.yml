@@ -2,7 +2,7 @@ services:
   headscale:
     # Pin by tag+digest so `docker compose pull` can't silently change what
     # you're running. To upgrade: pick a new version, resolve its digest
-    # (see README "Updating headscale"), and update both here deliberately.
+    # (see README "Updating"), and update both here deliberately.
     image: headscale/headscale:0.29.3@sha256:0e7f1c6e4ce6c2a2a001103ecd3fa645a045adf30ac8a5234fe037b43000cd72
     container_name: headscale
     restart: unless-stopped

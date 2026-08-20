@@ -26,7 +26,7 @@ cd /mnt/<pool>/apps && git clone <this-repo-url> headscale && cd headscale
 ./scripts/setup.sh
 ```
 
-That's the whole install for most people. The wizard asks about 9
+That's the whole install for most people. The wizard asks around 9
 questions (accepting every default is usually 3 real answers — your
 domain, an email, and a username), then it:
 
@@ -75,6 +75,9 @@ stack afterwards (add devices, tighten the ACL, add 2FA, back up, update).
   (e.g. Cloudflare).
 - Ability to port-forward 80/tcp and 443/tcp (and 443/udp for HTTP/3) from
   your router to your TrueNAS box.
+- `docker`, `openssl`, `curl`, and `python3` on the box for
+  `./scripts/setup.sh`/`./scripts/doctor.sh` — all four ship on stock
+  TrueNAS SCALE already, nothing extra to install.
 
 ## DNS and port-forwarding
 
@@ -198,9 +201,10 @@ domains and hash) every time it runs, deploy or not. To render it without
 deploying: `./scripts/setup.sh --skip-deploy`.
 
 To do it by hand: copy the `.tmpl` file and replace every `__TOKEN__` with
-a real value yourself (each one's meaning is in the file's own header
-comment), then Apps → Discover Apps → *Custom App* → *Install via YAML*,
-paste in the result.
+a real value yourself — `__REPO_DIR__` is wherever you cloned this repo
+(the `git clone` target from [Quick start](#quick-start)), the rest match
+the `.env` settings of the same name — then Apps → Discover Apps →
+*Custom App* → *Install via YAML*, paste in the result.
 
 Optional two-factor auth ([below](#optional-two-factor-authentication))
 isn't included in this file — its `secrets:`/profile-gated-service pattern
